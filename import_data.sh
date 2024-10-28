@@ -1,0 +1,1 @@
+mongoimport --uri 'mongodb://127.0.0.1:27117,127.0.0.1:27118' --db AmazonProductReviews --collection Reviews --file archive/Cell_Phones_and_Accessories/Cell_Phones_and_Accessories.json
