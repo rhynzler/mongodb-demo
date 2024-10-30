@@ -22,11 +22,22 @@
    docker-compose exec shard02-a sh -c "mongosh < /scripts/init-shard02.js"
    docker-compose exec shard03-a sh -c "mongosh < /scripts/init-shard03.js"
    ```
+   ![](screenshots/Screenshot_20241022_212850.png)
+
+   ![](screenshots/Screenshot_20241022_213040.png)
+
+   ![](screenshots/Screenshot_20241022_213056.png)
+
+   ![](screenshots/Screenshot_20241022_213116.png)
+
 3. Inicialización del enrutador.
 
    ```bash
    docker-compose exec router01 sh -c "mongosh < /scripts/init-router.js"
    ```
+
+   ![](screenshots/Screenshot_20241022_213453.png)
+
 4. Habilitación del sharding configuración de la llave de sharding
 
    ```bash
@@ -34,7 +45,7 @@
 
    sh.enableSharding("AmazonProductReviews")
 
-   db.adminCommand( { shardCollection: "AmazonProductReviews.Reviews", key: { oemNumber: "hashed", zipCode: 1, supplierId: 1 }, numInitialChunks: 3 } )
+   db.adminCommand( { shardCollection: "AmazonProductReviews.Reviews", key: { asin: "hashed", category: 1, reviewerID: 1 }, numInitialChunks: 3 } )
 
    ```
 5. Verificación de la implementación
@@ -50,6 +61,8 @@
    docker-compose exec router01 mongosh --port 27017
    sh.status()
    ```
+   ![Estado del cluster](screenshots/Screenshot_20241022_214221.png)
+
 6. Verificación del estado de cada Replica Set para cada Shard
 
    ```bash
@@ -61,9 +74,9 @@
 
    ```bash
    docker-compose exec router01 mongosh --port 27017
-   use MyDatabase
+   use AmazonProductReviews
    db.stats()
-   db.MyCollection.getShardDistribution()
+   db.Reviews.getShardDistribution()
    ```
 8. Comandos adicionales para verficar las configuraciones
 
@@ -76,7 +89,17 @@
    docker exec -it shard-01-node-a bash -c "echo 'rs.printReplicationInfo()' | mongosh --port 27017" 
    docker exec -it shard-01-node-a bash -c "echo 'rs.printSlaveReplicationInfo()' | mongosh --port 27017"
    ```
-9. Casos de Uso
+9. Datos
+
+   ![Título de los datos](data_title.png)
+
+   ![Descripción de los datos](data_description.png)
+
+   ### Inserción de los datos
+
+   ![Detalles de captura de datos](screenshots/Screenshot_20241023_215117.png)
+
+10. Casos de Uso
 
    ## Busquedas
    
@@ -97,7 +120,7 @@
 
    ## Agregaciones
 
-   ### Contabilizar la cantidad de rese;as por cada calificación
+   ### Contabilizar la cantidad de reseñas por cada calificación
 
    ```javascript
    db.Reviews.aggregate([
@@ -158,4 +181,45 @@
    ])
    ```
 
+   ## Map Reduce
 
+   ### Promedio de calificaciones por producto
+
+   ```javascript
+   // Función Map: Emitir cada producto con su calificación
+   var mapFunction = function() {
+      emit(this.asin, { sum: this.overall, count: 1 });
+   };
+
+   // Función Reduce: Sumar las calificaciones y contar reseñas
+   var reduceFunction = function(key, values) {
+      var result = { sum: 0, count: 0 };
+      values.forEach(function(value) {
+         result.sum += value.sum;
+         result.count += value.count;
+      });
+      return result;
+   };
+
+   // Función Finalize: Calcular el promedio
+   var finalizeFunction = function(key, reducedValue) {
+      reducedValue.avg = reducedValue.sum / reducedValue.count;
+      return reducedValue;
+   };
+
+   // Ejecutar el map-reduce en la colección Reviews
+   db.Reviews.mapReduce(
+      mapFunction,
+      reduceFunction,
+      {
+         out: "promedio_calificaciones_producto",
+         finalize: finalizeFunction
+      }
+   );
+   ```
+
+   Consultamos los datos
+
+   ```javascript
+   db.promedio_calificaciones_producto.find().pretty()
+   ```
